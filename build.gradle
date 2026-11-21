@@ -1,0 +1,185 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'com.gradleup.shadow' version '8.3.8'
+}
+
+group = 'me.levansj01.verus'
+version = 'b3952'
+
+def javaVersion = 17
+
+repositories {
+    mavenCentral()
+    maven { url = uri('https://hub.spigotmc.org/nexus/content/repositories/snapshots/') }
+}
+
+configurations {
+    apiGenerator
+}
+
+def generatorClasses = layout.buildDirectory.dir('api-generator/classes')
+tasks.register('compileApiGenerator', JavaCompile) {
+    source = files('gradle/GenerateCompileApis.java')
+    classpath = configurations.apiGenerator
+    destinationDirectory = generatorClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(javaVersion) }
+    options.release = javaVersion
+    options.encoding = 'UTF-8'
+}
+tasks.register('generateCompileApis', JavaExec) {
+    group = 'build setup'
+    description = 'Generates compile-only API headers from text declarations.'
+    dependsOn tasks.named('compileApiGenerator')
+    inputs.dir('gradle/api-signatures')
+    outputs.dir(layout.buildDirectory.dir('compile-apis'))
+    classpath = files(generatorClasses) + configurations.apiGenerator
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(javaVersion) }
+    mainClass = 'GenerateCompileApis'
+    maxHeapSize = '2g'
+    args file('gradle/api-signatures').absolutePath, layout.buildDirectory.dir('compile-apis').get().asFile.absolutePath
+}
+def compileApi = { String name ->
+    files(layout.buildDirectory.file("compile-apis/${name}.jar")).builtBy(tasks.named('generateCompileApis'))
+}
+tasks.register('prepareIde') {
+    group = 'ide'
+    description = 'Generates the compile-only API headers used by the IDE import.'
+    dependsOn tasks.named('generateCompileApis')
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(javaVersion)
+    withSourcesJar()
+}
+
+dependencies {
+    apiGenerator 'org.ow2.asm:asm:9.8'
+    apiGenerator 'com.google.code.gson:gson:2.10.1'
+
+    implementation 'org.mongodb:mongo-java-driver:3.12.14'
+    implementation 'com.zaxxer:HikariCP:4.0.3'
+    implementation 'org.lz4:lz4-java:1.8.0'
+    implementation 'club.minnced:discord-webhooks:0.5.7'
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
+
+    compileOnly compileApi('verus')
+    compileOnly 'com.google.guava:guava:21.0'
+    compileOnly 'io.netty:netty-all:4.1.25.Final'
+    compileOnly 'net.sf.trove4j:trove4j:3.0.3'
+    compileOnly 'it.unimi.dsi:fastutil:8.5.2'
+    compileOnly 'commons-lang:commons-lang:2.6'
+    compileOnly 'net.md-5:bungeecord-chat:1.16-R0.4'
+    compileOnly 'org.jetbrains:annotations:24.1.0'
+    compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    if (name != 'compileApiGenerator') {
+        dependsOn tasks.named('generateCompileApis')
+    }
+    options.release = javaVersion
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-parameters', '-Xmaxerrs', '1500']
+    options.debug = true
+    options.debugOptions.debugLevel = 'source,lines,vars'
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    filePermissions { unix('0644') }
+    dirPermissions { unix('0755') }
+}
+
+def nmsApis = [
+    'v1_7_R4' : 'verus-nms-legacy',
+    'v1_8_R3' : 'verus-nms-legacy',
+    'v1_11_R1': 'verus-nms-legacy',
+    'v1_12_R1': 'verus-nms-legacy',
+    'v1_13_R2': 'verus-nms-legacy',
+    'v1_14_R1': 'verus-nms-legacy',
+    'v1_15_R1': 'verus-nms-legacy',
+    'v1_16_R1': 'verus-nms-legacy',
+    'v1_16_R2': 'verus-nms-legacy',
+    'v1_16_R3': 'verus-nms-legacy',
+    'v1_17_R1': 'verus-nms-v1_17_R1',
+    'v1_18_R1': 'verus-nms-v1_18_R1',
+    'v1_18_R2': 'verus-nms-v1_18_R2',
+    'v1_19_R1': 'verus-nms-v1_19_R1',
+    'v1_19_R2': 'verus-nms-v1_19_R2',
+    'v1_19_R3': 'verus-nms-v1_19_R3',
+    'v1_20_R1': 'verus-nms-v1_20_R1',
+    'v1_20_R3': 'verus-nms-v1_20_R3',
+]
+
+def serverVersions = file('platforms/versions.txt').readLines().findAll { !it.isBlank() }
+serverVersions.each { serverVersion ->
+    def set = sourceSets.create('server_' + serverVersion)
+    set.java.setSrcDirs(['platforms/' + serverVersion + '/src/main/java'])
+    set.resources.setSrcDirs([])
+    set.compileClasspath = compileApi(nmsApis[serverVersion]) + sourceSets.main.output + configurations.compileClasspath
+    tasks.named(set.compileJavaTaskName) { dependsOn tasks.named('classes') }
+    tasks.named('jar') { from set.output; dependsOn tasks.named(set.classesTaskName) }
+    tasks.named('shadowJar') { from set.output; dependsOn tasks.named(set.classesTaskName) }
+    tasks.named('sourcesJar') { from set.allSource }
+}
+
+// Cross-version adapter reuse present in Verus (v1_11_R1 -> v1_7_R4 listener, v1_19_R1 -> v1_19_R2 packets/listener)
+sourceSets.named('server_v1_11_R1') {
+    compileClasspath += sourceSets.server_v1_7_R4.output
+}
+tasks.named('compileServer_v1_11_R1Java') { dependsOn tasks.named('server_v1_7_R4Classes') }
+sourceSets.named('server_v1_19_R1') {
+    compileClasspath += sourceSets.server_v1_19_R2.output
+}
+tasks.named('compileServer_v1_19_R1Java') { dependsOn tasks.named('server_v1_19_R2Classes') }
+
+jar {
+    archiveClassifier = 'plain'
+    manifest.attributes('Implementation-Title': 'Verus', 'Implementation-Version': project.version)
+}
+
+shadowJar {
+    archiveClassifier = 'java17'
+    relocate 'org.bson', 'me.levansj01.verus.util.bson'
+    relocate 'com.mongodb', 'me.levansj01.verus.util.mongodb'
+    relocate 'com.zaxxer.hikari', 'me.levansj01.verus.util.hikari'
+    relocate 'net.jpountz', 'me.levansj01.verus.util.jpountz'
+    relocate 'club.minnced.discord.webhook', 'me.levansj01.verus.util.webhook'
+    relocate 'okhttp3', 'me.levansj01.verus.util.okhttp3'
+    relocate 'okio', 'me.levansj01.verus.util.okio'
+    relocate 'org.slf4j', 'me.levansj01.verus.util.slf4j'
+    relocate 'org.json', 'me.levansj01.verus.util.json'
+    minimize {
+        exclude(dependency('org.lz4:lz4-java:.*'))
+        exclude(dependency('com.zaxxer:HikariCP:.*'))
+        exclude(dependency('javax.xml.bind:jaxb-api:.*'))
+    }
+    mergeServiceFiles()
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+    exclude 'META-INF/INDEX.LIST', 'META-INF/maven/**'
+    exclude 'META-INF/LICENSE', 'META-INF/LICENSE.txt', 'META-INF/NOTICE', 'META-INF/NOTICE.txt'
+    manifest.attributes('Implementation-Title': 'Verus', 'Implementation-Version': project.version)
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+assemble.dependsOn shadowJar
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
+eclipse {
+    classpath {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

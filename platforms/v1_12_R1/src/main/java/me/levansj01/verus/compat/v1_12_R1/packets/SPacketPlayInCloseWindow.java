@@ -1,0 +1,14 @@
+package me.levansj01.verus.compat.v1_12_R1.packets;
+
+import java.lang.reflect.Field;
+import me.levansj01.verus.compat.packets.VPacketPlayInCloseWindow;
+import me.levansj01.verus.util.java.SafeReflection;
+import net.minecraft.server.v1_12_R1.PacketPlayInCloseWindow;
+
+public class SPacketPlayInCloseWindow extends VPacketPlayInCloseWindow<PacketPlayInCloseWindow> {
+    private static final Field window_field = SafeReflection.access(PacketPlayInCloseWindow.class, "id");
+
+    public void accept(PacketPlayInCloseWindow packet) {
+        this.window = SafeReflection.<Integer>fetch(window_field, packet);
+    }
+}

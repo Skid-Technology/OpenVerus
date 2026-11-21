@@ -1,0 +1,14 @@
+package me.levansj01.verus.compat.v1_19_R2.packets;
+
+import me.levansj01.verus.compat.packets.VPacketPlayInVehicleMove;
+import net.minecraft.network.protocol.game.PacketPlayInVehicleMove;
+
+public class SPacketPlayInVehicleMove extends VPacketPlayInVehicleMove<PacketPlayInVehicleMove> {
+    public void accept(PacketPlayInVehicleMove packet) {
+        this.x = packet.b();
+        this.y = packet.c();
+        this.z = packet.d();
+        this.yaw = packet.e();
+        this.pitch = packet.f();
+    }
+}

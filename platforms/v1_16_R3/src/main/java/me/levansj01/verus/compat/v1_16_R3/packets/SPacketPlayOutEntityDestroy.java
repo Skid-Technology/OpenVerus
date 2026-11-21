@@ -1,0 +1,14 @@
+package me.levansj01.verus.compat.v1_16_R3.packets;
+
+import java.lang.reflect.Field;
+import me.levansj01.verus.compat.packets.VPacketPlayOutEntityDestroy;
+import me.levansj01.verus.util.java.SafeReflection;
+import net.minecraft.server.v1_16_R3.PacketPlayOutEntityDestroy;
+
+public class SPacketPlayOutEntityDestroy extends VPacketPlayOutEntityDestroy<PacketPlayOutEntityDestroy> {
+    private static final Field ids_field = SafeReflection.access(PacketPlayOutEntityDestroy.class, "a");
+
+    public void accept(PacketPlayOutEntityDestroy packet) {
+        this.ids = SafeReflection.fetch(ids_field, packet);
+    }
+}

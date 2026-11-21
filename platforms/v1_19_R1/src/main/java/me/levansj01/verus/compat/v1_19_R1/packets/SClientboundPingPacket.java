@@ -1,0 +1,10 @@
+package me.levansj01.verus.compat.v1_19_R1.packets;
+
+import me.levansj01.verus.compat.packets.VClientboundPingPacket;
+import net.minecraft.network.protocol.game.ClientboundPingPacket;
+
+public class SClientboundPingPacket extends VClientboundPingPacket<ClientboundPingPacket> {
+    public void accept(ClientboundPingPacket packet) {
+        this.id = packet.b();
+    }
+}
