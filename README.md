@@ -24,10 +24,6 @@
   <img src="assets/deobf.jpg" alt="deobf" height="150" />
 </p>
 
-<p align="center">
-  <img src="assets/divider.svg" alt="" width="720" />
-</p>
-
 ## Why?
 - The anticheat is horrible, a lot of servers paid for it and almost every single one changed to another anticheat because this crap doesn't even have an attempt of prediction like Vulcan, the development is pretty inactive and it looks like the devs of Verus never played minecraft in their entire life.
 
